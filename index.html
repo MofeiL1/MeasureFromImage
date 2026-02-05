@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片测量助手-Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+            font-family: 'Inter', sans-serif;
+        }
+        #canvas-viewport {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: #262626;
+            background-image: 
+                linear-gradient(45deg, #333 25%, transparent 25%), 
+                linear-gradient(-45deg, #333 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #333 75%), 
+                linear-gradient(-45deg, transparent 75%, #333 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            cursor: default;
+        }
+        .cursor-crosshair { cursor: crosshair; }
+        .cursor-grab { cursor: grab; }
+        .cursor-grabbing { cursor: grabbing !important; }
+        .cursor-pointer { cursor: pointer; }
+        .cursor-move { cursor: move; }
+        .cursor-none { cursor: none !important; }
+
+        #image-layer {
+            position: absolute;
+            transform-origin: 0 0;
+            pointer-events: none;
+            will-change: transform;
+        }
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        #styleMenu, #resetModal, #miniMenu {
+            transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+            transform-origin: center bottom;
+        }
+        .menu-hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.9);
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部工具栏 -->
+    <header class="bg-white shadow-lg p-3 flex flex-wrap items-center justify-between gap-4 z-20">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold text-gray-800 tracking-tight">图片测量助手 <span class="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded ml-1">Pro</span></h1>
+            <label class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer transition text-sm flex items-center gap-2 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>
+                上传图片
+                <input type="file" id="imageInput" accept="image/*" class="hidden">
+            </label>
+        </div>
+
+        <div class="flex bg-gray-100 p-1 rounded-lg shadow-inner">
+            <button id="modeSelect" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M14.082 2.182a.5.5 0 0 1 .103.557L8.528 15.467a.5.5 0 0 1-.917-.007L5.57 10.694.803 8.652a.5.5 0 0 1-.006-.916l12.728-5.657a.5.5 0 0 1 .556.103z"/></svg>
+                选择 (S)
+            </button>
+            <button id="modeCalib" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white shadow text-blue-600 flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M8.5 5.6a.5.5 0 1 0-1 0v2.9h-3a.5.5 0 0 0 0 1H8a.5.5 0 0 0 .5-.5V5.6z"/><path d="M6.5 1A1.5 1.5 0 0 0 5 2.5V3H1.5A1.5 1.5 0 0 0 0 4.5v8A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 14.5 3H11v-.5A1.5 1.5 0 0 0 9.5 1h-3zm0 1h3a.5.5 0 0 1 .5.5V3H6v-.5a.5.5 0 0 1 .5-.5zM11 2.5v2h1a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-2a.5.5 0 0 1 .5-.5h1z"/></svg>
+                校准 (C)
+            </button>
+            <button id="modeMeasure" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-9 4a1 1 0 1 1 2 0 1 1 0 0 1-2 0zm9 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm0 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm1.5 0a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5h12a.5.5 0 0 0 .5-.5V2a.5.5 0 0 0-.5-.5H1.5z"/></svg>
+                测量 (M)
+            </button>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 border-l pl-4 border-gray-200">
+                <span class="text-xs text-gray-500 font-medium">单位:</span>
+                <select id="unitSelect" class="border border-gray-300 rounded px-2 py-1 text-sm bg-white outline-none hover:border-blue-400 focus:border-blue-500 transition">
+                    <option value="mm" selected>mm</option>
+                    <option value="cm">cm</option>
+                    <option value="m">m</option>
+                    <option value="inch">inch</option>
+                </select>
+            </div>
+            <button id="toggleStyleMenu" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium transition text-gray-700">
+                样式
+            </button>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <div class="flex items-center bg-gray-100 rounded p-1 shadow-inner">
+                <button id="zoomOut" class="w-8 h-8 hover:bg-white rounded shadow-sm text-lg font-bold text-gray-600 flex justify-center items-center">-</button>
+                <span id="zoomDisplay" class="px-2 font-mono text-xs min-w-[48px] text-center text-gray-700">100%</span>
+                <button id="zoomIn" class="w-8 h-8 hover:bg-white rounded shadow-sm text-lg font-bold text-gray-600 flex justify-center items-center">+</button>
+            </div>
+            <button id="resetBtn" class="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded text-sm font-bold border border-red-200 transition">重置</button>
+        </div>
+    </header>
+
+    <div id="miniMenu" class="absolute z-40 bg-gray-800 text-white rounded-lg shadow-xl py-1 px-1 flex items-center gap-1 menu-hidden left-0 top-0 overflow-hidden">
+        <!-- 内容由 JS 动态生成 -->
+    </div>
+
+    <div id="styleMenu" class="absolute right-4 top-20 w-72 bg-white rounded-xl shadow-2xl z-30 p-5 border border-gray-100 menu-hidden">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-gray-800">显示设置</h3>
+            <button id="closeStyleMenu" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">字体大小 (<span id="fsVal">13</span>px)</label>
+                <input type="range" id="inputFontSize" min="10" max="24" step="1" value="13" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">标签透明度 (<span id="opVal">75</span>%)</label>
+                <input type="range" id="inputBgOpacity" min="0" max="100" step="5" value="75" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">球头大小 (<span id="dotVal">4</span>px)</label>
+                <input type="range" id="inputDotRadius" min="1" max="15" step="0.5" value="4" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2 uppercase">线段粗细 (<span id="lwVal">2</span>px)</label>
+                <input type="range" id="inputLineWidth" min="0.5" max="8" step="0.5" value="2" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-2 uppercase text-center">标签位置</label>
+                <div class="grid grid-cols-3 gap-1.5 p-1.5 bg-gray-50 rounded-lg border border-gray-100">
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="top-left">↖</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="top">↑</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="top-right">↗</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="left">←</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="center">●</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="right">→</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="bottom-left">↙</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="bottom">↓</button>
+                    <button class="align-btn p-1.5 hover:bg-white rounded text-[10px] transition border border-transparent" data-val="bottom-right">↘</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="resetModalContainer" class="fixed inset-0 z-50 flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 modal-backdrop">
+        <div id="resetModal" class="bg-white rounded-xl shadow-2xl w-80 max-w-[90vw] p-6 relative">
+            <button id="closeResetModalX" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            <h3 class="text-lg font-bold text-gray-800 mb-2">确认重置</h3>
+            <p class="text-sm text-gray-600 mb-6">确定要清除所有测量数据和校准设置吗？</p>
+            <div class="flex items-center justify-end gap-3">
+                <button id="cancelReset" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition">取消</button>
+                <button id="confirmReset" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg shadow-md transition">确定重置</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-viewport">
+        <div id="image-layer">
+            <canvas id="imgCanvas"></canvas>
+        </div>
+        <canvas id="overlay-canvas"></canvas>
+    </div>
+
+    <div class="bg-gray-900 text-gray-400 text-[11px] uppercase tracking-wider p-2 px-4 flex justify-between items-center z-20">
+        <div class="flex gap-4 items-center overflow-hidden whitespace-nowrap">
+            <span class="hidden sm:inline">[空格+拖拽] 移动画布</span>
+            <span class="hidden sm:inline w-px h-3 bg-gray-700 mx-1"></span>
+            <span>[滚轮] 缩放</span>
+            <span class="w-px h-3 bg-gray-700 mx-1"></span>
+            <span class="hidden sm:inline">[Shift] 多选</span>
+            <span class="w-px h-3 bg-gray-700 mx-1"></span>
+            <span class="hidden sm:inline">[双击标签] 编辑</span>
+        </div>
+        <div id="scaleInfo" class="text-white font-mono bg-blue-900 px-3 py-0.5 rounded shadow-sm text-xs truncate ml-2">未校准</div>
+    </div>
+
+    <div id="toast" class="fixed bottom-16 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-2.5 rounded-full shadow-2xl transition-all opacity-0 scale-95 pointer-events-none z-50 text-sm font-medium flex items-center gap-2">
+        <span id="toastMsg"></span>
+    </div>
+
+    <script>
+        // --- 核心状态 ---
+        let state = {
+            img: null,
+            scale: 1.0,
+            offsetX: 0,
+            offsetY: 0,
+            mode: 'calibrate', 
+            
+            isDrawing: false,
+            isPanning: false,
+            isBoxSelecting: false,
+            isMovingSelection: false,
+            isMoveToolActive: false,
+            hasMoved: false,
+            
+            editingLineIndex: -1, 
+            blinkState: true, 
+            
+            spacePressed: false,
+
+            startX: 0, startY: 0,
+            currX: 0, currY: 0,
+            lastMouse: { x: 0, y: 0 },
+            
+            pixelsPerUnit: null,
+            unit: 'mm',
+            calibLines: [],
+            measureLines: [],
+            pendingLine: null,
+            inputBuffer: "",
+            
+            hovered: null, 
+            selection: [], 
+            selectionBox: null, 
+            boxHovered: [], 
+            
+            menuSignature: null,
+
+            labelStyle: {
+                fontSize: 13,
+                bgOpacity: 75,
+                align: 'bottom-right',
+                dotRadius: 4,
+                lineWidth: 2
+            }
+        };
+
+        const config = {
+            colors: {
+                calib: '#ef4444',
+                measure: '#3b82f6',
+                fixed: '#10b981',
+                hover: 'rgba(59, 130, 246, 0.4)',
+                selected: 'rgba(37, 99, 235, 0.7)',
+                selectionBoxBorder: '#3b82f6',
+                selectionBoxFill: 'rgba(59, 130, 246, 0.1)'
+            },
+            hitDist: 8,
+            lineHitDist: 6,
+            labelPadding: 8,
+            unitMultipliers: {
+                'mm': 1, 'cm': 10, 'm': 1000, 'inch': 25.4
+            }
+        };
+
+        const el = {
+            viewport: document.getElementById('canvas-viewport'),
+            imageLayer: document.getElementById('image-layer'),
+            imgCanvas: document.getElementById('imgCanvas'),
+            overlay: document.getElementById('overlay-canvas'),
+            ctxImg: document.getElementById('imgCanvas').getContext('2d'),
+            ctxOver: document.getElementById('overlay-canvas').getContext('2d'),
+            btns: {
+                calib: document.getElementById('modeCalib'),
+                measure: document.getElementById('modeMeasure'),
+                select: document.getElementById('modeSelect')
+            },
+            unitSelect: document.getElementById('unitSelect'),
+            scaleInfo: document.getElementById('scaleInfo'),
+            toast: document.getElementById('toast'),
+            toastMsg: document.getElementById('toastMsg'),
+            imageInput: document.getElementById('imageInput'),
+            miniMenu: document.getElementById('miniMenu'),
+            styleBtn: document.getElementById('toggleStyleMenu'),
+            styleMenu: document.getElementById('styleMenu'),
+            closeStyleMenu: document.getElementById('closeStyleMenu'),
+            inputFontSize: document.getElementById('inputFontSize'),
+            inputBgOpacity: document.getElementById('inputBgOpacity'),
+            inputDotRadius: document.getElementById('inputDotRadius'),
+            inputLineWidth: document.getElementById('inputLineWidth'),
+            fsVal: document.getElementById('fsVal'),
+            opVal: document.getElementById('opVal'),
+            dotVal: document.getElementById('dotVal'),
+            lwVal: document.getElementById('lwVal'),
+            resetModal: document.getElementById('resetModalContainer'),
+            resetBtn: document.getElementById('resetBtn'),
+            confirmReset: document.getElementById('confirmReset'),
+            cancelReset: document.getElementById('cancelReset'),
+            closeResetX: document.getElementById('closeResetModalX'),
+            zoomIn: document.getElementById('zoomIn'),
+            zoomOut: document.getElementById('zoomOut'),
+            zoomDisplay: document.getElementById('zoomDisplay')
+        };
+
+        // --- 事件与逻辑 ---
+        
+        el.unitSelect.onchange = (e) => {
+            if (state.editingLineIndex !== -1) {
+                state.editingLineIndex = -1;
+                state.inputBuffer = "";
+            }
+
+            const newUnit = e.target.value;
+            const oldUnit = state.unit;
+            
+            if (oldUnit === newUnit) return;
+
+            const oldBase = config.unitMultipliers[oldUnit];
+            const newBase = config.unitMultipliers[newUnit];
+
+            if (state.calibLines.length > 0 && oldBase && newBase) {
+                const ratio = oldBase / newBase;
+                state.calibLines.forEach(l => l.realLen *= ratio);
+                showToast(`单位已切换: ${oldUnit} -> ${newUnit}`);
+            }
+            
+            state.unit = newUnit;
+            updateScale();
+            requestRender();
+        };
+
+        el.imageInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    state.img = img; 
+                    resetData(); 
+                    initImageCanvas();
+                    autoFit(); 
+                    requestRender();
+                    showToast("图片已加载");
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        function initImageCanvas() {
+            if (!state.img) return;
+            el.imgCanvas.width = state.img.width;
+            el.imgCanvas.height = state.img.height;
+            el.ctxImg.drawImage(state.img, 0, 0);
+        }
+
+        function resetData() {
+            state.calibLines = []; state.measureLines = []; state.pendingLine = null;
+            state.inputBuffer = ""; state.pixelsPerUnit = null; state.selection = [];
+            state.hovered = null; state.isMoveToolActive = false; state.editingLineIndex = -1; 
+            hideMiniMenu(); updateScale();
+        }
+
+        function toImg(screenX, screenY) { 
+            return { x: (screenX - state.offsetX) / state.scale, y: (screenY - state.offsetY) / state.scale }; 
+        }
+        function toScreen(imgX, imgY) { 
+            return { x: imgX * state.scale + state.offsetX, y: imgY * state.scale + state.offsetY }; 
+        }
+
+        setInterval(() => { 
+            if (state.editingLineIndex !== -1) { 
+                state.blinkState = !state.blinkState; 
+                requestRender(); 
+            } 
+        }, 500);
+
+        let renderRequested = false;
+        function requestRender() {
+            if (!renderRequested) {
+                renderRequested = true;
+                requestAnimationFrame(() => { render(); renderRequested = false; });
+            }
+        }
+
+        function drawCrosshair(ctx, x, y) {
+            ctx.save();
+            const size = 16;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(x-size, y); ctx.lineTo(x+size, y); ctx.moveTo(x, y-size); ctx.lineTo(x, y+size); ctx.stroke();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x-size, y); ctx.lineTo(x+size, y); ctx.moveTo(x, y-size); ctx.lineTo(x, y+size); ctx.stroke();
+            ctx.restore();
+        }
+
+        function render() {
+            if (!state.img) return;
+            const dpr = window.devicePixelRatio || 1;
+            const rect = el.viewport.getBoundingClientRect();
+            if (el.overlay.width !== rect.width * dpr || el.overlay.height !== rect.height * dpr) {
+                el.overlay.width = rect.width * dpr; el.overlay.height = rect.height * dpr;
+                el.ctxOver.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            el.imageLayer.style.transform = `translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
+
+            const ctx = el.ctxOver; 
+            ctx.clearRect(0, 0, rect.width, rect.height);
+
+            const isSel = (type, idx, part) => state.selection.some(s => s.type === type && s.index === idx && s.part === part);
+            const isHover = (type, idx, part) => state.hovered && state.hovered.type === type && state.hovered.index === idx && state.hovered.part === part;
+            const isBoxHover = (type, idx, part) => state.boxHovered.some(s => s.type === type && s.index === idx && s.part === part);
+            
+            const drawEntity = (lines, type, color) => {
+                lines.forEach((l, i) => {
+                    const lineSel = isSel(type, i, 'line');
+                    const p1Sel = isSel(type, i, 'p1'), p2Sel = isSel(type, i, 'p2');
+                    const labelSel = isSel(type, i, 'label'), lineHov = isHover(type, i, 'line');
+                    const p1Hov = isHover(type, i, 'p1'), p2Hov = isHover(type, i, 'p2'), labelHov = isHover(type, i, 'label');
+                    
+                    const showLineGlow = lineSel || isBoxHover(type, i, 'line') || lineHov;
+                    const showP1Glow = p1Sel || isBoxHover(type, i, 'p1') || p1Hov || showLineGlow;
+                    const showP2Glow = p2Sel || isBoxHover(type, i, 'p2') || p2Hov || showLineGlow;
+                    const isEditing = (type === 'calib' && i === state.editingLineIndex);
+                    
+                    let overrideLabel = null;
+                    if (isEditing) overrideLabel = `${state.inputBuffer}${state.blinkState ? "|" : " "} ${state.unit}`;
+                    let drawColor = isEditing ? config.colors.calib : color;
+                    
+                    const isMovingP1 = state.isMovingSelection && (p1Sel || lineSel);
+                    const isMovingP2 = state.isMovingSelection && (p2Sel || lineSel);
+
+                    drawLine(ctx, l, drawColor, type, i, {
+                        lineGlow: showLineGlow, p1Glow: showP1Glow, p2Glow: showP2Glow,
+                        labelGlow: labelSel || labelHov, isLineSel: lineSel, isP1Sel: p1Sel, isP2Sel: p2Sel,
+                        isEditing: isEditing, isMovingP1, isMovingP2
+                    }, overrideLabel);
+                });
+            };
+
+            drawEntity(state.calibLines, 'calib', config.colors.fixed);
+            drawEntity(state.measureLines, 'measure', config.colors.measure);
+
+            if (state.pendingLine) {
+                const label = state.inputBuffer ? `${state.inputBuffer} ${state.unit}` : "输入长度...";
+                drawLine(ctx, state.pendingLine, config.colors.calib, 'temp', -1, { lineGlow: true, p1Glow: true, p2Glow: true }, label);
+            }
+
+            if (state.isDrawing && !state.isBoxSelecting) {
+                const p1 = toScreen(state.startX, state.startY);
+                const p2 = toScreen(state.currX, state.currY);
+                ctx.save();
+                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = state.mode === 'calibrate' ? config.colors.calib : config.colors.measure;
+                ctx.lineWidth = state.labelStyle.lineWidth; ctx.stroke();
+                ctx.restore();
+
+                if (state.mode === 'measure' && state.pixelsPerUnit) {
+                    const distImg = Math.hypot(state.currX - state.startX, state.currY - state.startY);
+                    const realDist = (distImg / state.pixelsPerUnit).toFixed(2);
+                    drawLabelBox(ctx, p1, p2, `${realDist} ${state.unit}`);
+                }
+                drawCrosshair(ctx, p1.x, p1.y);
+                drawCrosshair(ctx, p2.x, p2.y);
+            }
+
+            if (state.isBoxSelecting && state.selectionBox) {
+                const { x, y, w, h } = state.selectionBox;
+                ctx.save(); ctx.strokeStyle = config.colors.selectionBoxBorder; ctx.fillStyle = config.colors.selectionBoxFill;
+                ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.strokeRect(x, y, w, h); ctx.fillRect(x, y, w, h); ctx.restore();
+            }
+
+            updateCursor();
+            
+            if (state.selection.length > 0 && !state.isMovingSelection && !el.miniMenu.classList.contains('menu-hidden')) {
+                updateMiniMenuPosition();
+            }
+        }
+
+        function drawLabelBox(ctx, p1, p2, label) {
+            const style = state.labelStyle;
+            ctx.font = `bold ${style.fontSize}px Inter, sans-serif`;
+            const tm = ctx.measureText(label);
+            const fw = tm.width + config.labelPadding * 2;
+            const fh = style.fontSize + config.labelPadding * 2;
+            const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+            const gap = 12;
+            let rx, ry;
+            
+            if (style.align.includes('top')) ry = my - fh - gap; 
+            else if (style.align.includes('bottom')) ry = my + gap; 
+            else ry = my - fh/2;
+            
+            if (style.align.includes('left')) rx = mx - fw - gap; 
+            else if (style.align.includes('right')) rx = mx + gap; 
+            else rx = mx - fw/2;
+            
+            ctx.fillStyle = `rgba(0,0,0,${style.bgOpacity / 100})`;
+            ctx.beginPath(); ctx.roundRect(rx, ry, fw, fh, 4); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(label, rx + fw/2, ry + fh/2 + 1);
+            return { x: rx, y: ry, w: fw, h: fh };
+        }
+
+        function drawLine(ctx, line, color, type, index, flags, overrideLabel) {
+            const p1 = toScreen(line.x1, line.y1), p2 = toScreen(line.x2, line.y2);
+            let label = overrideLabel;
+            if (!label) {
+                if (type === 'calib') label = `${parseFloat(line.realLen).toFixed(2)} ${state.unit}`;
+                else if (type === 'measure') label = state.pixelsPerUnit ? `${(line.pxLen / state.pixelsPerUnit).toFixed(2)} ${state.unit}` : '未校准';
+            }
+            if (flags.lineGlow) {
+                ctx.save(); ctx.shadowBlur = 10; ctx.lineCap = 'round';
+                ctx.shadowColor = (flags.isLineSel || flags.isP1Sel || flags.isP2Sel) ? config.colors.selected : config.colors.hover;
+                ctx.strokeStyle = ctx.shadowColor; ctx.lineWidth = state.labelStyle.lineWidth + 4; 
+                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); ctx.restore(); 
+            }
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = state.labelStyle.lineWidth;
+            ctx.lineCap = 'round'; ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+
+            const drawPoint = (pt, isGlow, isSel, isMoving) => {
+                if (isMoving) { drawCrosshair(ctx, pt.x, pt.y); return; }
+                if (isGlow) {
+                    ctx.save(); ctx.shadowBlur = 10; ctx.shadowColor = isSel ? config.colors.selected : config.colors.hover;
+                    ctx.fillStyle = ctx.shadowColor; ctx.beginPath(); ctx.arc(pt.x, pt.y, state.labelStyle.dotRadius + 3, 0, Math.PI*2); ctx.fill(); ctx.restore();
+                }
+                ctx.save(); ctx.fillStyle = 'white'; ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(pt.x, pt.y, state.labelStyle.dotRadius, 0, Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore();
+            };
+            drawPoint(p1, flags.p1Glow, flags.isP1Sel, flags.isMovingP1);
+            drawPoint(p2, flags.p2Glow, flags.isP2Sel, flags.isMovingP2);
+
+            if (label) {
+                const rect = drawLabelBox(ctx, p1, p2, label); line._labelRect = rect;
+                if (flags.labelGlow) {
+                     ctx.save(); ctx.shadowBlur = 8; ctx.shadowColor = config.colors.selected; ctx.fillStyle = config.colors.selected;
+                     ctx.beginPath(); ctx.roundRect(rect.x-2, rect.y-2, rect.w+4, rect.h+4, 6); ctx.fill(); ctx.restore();
+                     ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, rect.x + rect.w/2, rect.y + rect.h/2 + 1);
+                }
+            }
+        }
+
+        function hitTest(mx, my) {
+            const imgP = toImg(mx, my);
+            for (let i = 0; i < state.calibLines.length; i++) {
+                const r = state.calibLines[i]._labelRect;
+                if (r && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) return { type: 'calib', index: i, part: 'label' };
+            }
+            const hitDistImg = config.hitDist / state.scale;
+            
+            const checkPoints = (lines, type) => {
+                 for (let i = 0; i < lines.length; i++) {
+                    const l = lines[i];
+                    if (Math.hypot(imgP.x - l.x1, imgP.y - l.y1) < hitDistImg) return { type, index: i, part: 'p1' };
+                    if (Math.hypot(imgP.x - l.x2, imgP.y - l.y2) < hitDistImg) return { type, index: i, part: 'p2' };
+                }
+                return null;
+            }
+            
+            let ptHit = checkPoints(state.measureLines, 'measure') || checkPoints(state.calibLines, 'calib');
+            if (ptHit) return ptHit;
+
+            const lineDistImg = config.lineHitDist / state.scale;
+            const distToSeg = (p, l) => {
+                const dx = l.x2 - l.x1, dy = l.y2 - l.y1, len2 = dx*dx + dy*dy;
+                if (len2 === 0) return Math.hypot(p.x - l.x1, p.y - l.y1);
+                let t = Math.max(0, Math.min(1, ((p.x - l.x1) * dx + (p.y - l.y1) * dy) / len2));
+                return Math.hypot(p.x - (l.x1 + t*dx), p.y - (l.y1 + t*dy));
+            };
+
+            for (let i = 0; i < state.measureLines.length; i++) if (distToSeg(imgP, state.measureLines[i]) < lineDistImg) return { type: 'measure', index: i, part: 'line' };
+            for (let i = 0; i < state.calibLines.length; i++) if (distToSeg(imgP, state.calibLines[i]) < lineDistImg) return { type: 'calib', index: i, part: 'line' };
+            return null;
+        }
+
+        el.overlay.ondblclick = (e) => {
+            const rect = el.overlay.getBoundingClientRect();
+            const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top);
+            if (hit && hit.type === 'calib') changeLength(hit.index);
+        };
+
+        el.overlay.onmousedown = (e) => {
+            if (!state.img) return;
+            if (state.editingLineIndex !== -1) {
+                const val = parseFloat(state.inputBuffer);
+                if (!isNaN(val) && val > 0) commitEdit(val); else { state.editingLineIndex = -1; requestRender(); }
+                return;
+            }
+            const rect = el.overlay.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            
+            if (state.spacePressed) { 
+                state.isPanning = true; 
+                state.lastMouse = { x: e.clientX, y: e.clientY }; 
+                return; 
+            }
+
+            if (state.mode === 'select') {
+                const hit = hitTest(mx, my);
+                // 移动工具激活逻辑
+                if (state.isMoveToolActive && !(state.selection.length === 1 && state.selection[0].part === 'label')) {
+                    state.isMovingSelection = true; 
+                    state.lastMouse = { x: mx, y: my }; 
+                    state.hasMoved = false; 
+                    hideMiniMenu(); 
+                    return;
+                }
+                
+                // 框选逻辑
+                if (!hit) { 
+                    if (!e.shiftKey) { state.selection = []; hideMiniMenu(); }
+                    state.isBoxSelecting = true; 
+                    state.startX = mx; state.startY = my; 
+                    state.selectionBox = { x: mx, y: my, w: 0, h: 0 }; 
+                    requestRender(); 
+                    return;
+                }
+                
+                // 点选逻辑
+                const isExactSelected = state.selection.some(s => s.type === hit.type && s.index === hit.index && s.part === hit.part);
+                if (e.shiftKey) toggleSelection(hit); 
+                else if (!isExactSelected) state.selection = [hit];
+                
+                // 默认拖拽逻辑
+                if (hit.part !== 'label') { 
+                    state.isMovingSelection = true; 
+                    state.lastMouse = { x: mx, y: my }; 
+                    state.hasMoved = false; 
+                    hideMiniMenu(); 
+                } else state.isMovingSelection = false;
+                
+                updateMiniMenuPosition(); 
+                requestRender(); 
+                return;
+            }
+            
+            // 绘制逻辑
+            state.isDrawing = true; 
+            const imgP = toImg(mx, my); 
+            state.startX = imgP.x; state.startY = imgP.y; 
+            state.currX = imgP.x; state.currY = imgP.y;
+            updateCursor();
+        };
+
+        window.onmousemove = (e) => {
+            if (!state.img) return;
+            const rect = el.overlay.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            
+            let dirty = false;
+
+            if (state.isPanning) {
+                state.offsetX += e.clientX - state.lastMouse.x; 
+                state.offsetY += e.clientY - state.lastMouse.y;
+                state.lastMouse = { x: e.clientX, y: e.clientY }; 
+                dirty = true;
+            } else if (state.mode === 'select' && state.isMovingSelection) {
+                const dx = (mx - state.lastMouse.x) / state.scale;
+                const dy = (my - state.lastMouse.y) / state.scale;
+                state.hasMoved = true; 
+                moveSelection(dx, dy); 
+                state.lastMouse = { x: mx, y: my }; 
+                dirty = true;
+            } else if (state.mode === 'select' && state.isBoxSelecting) {
+                state.selectionBox = { x: state.startX, y: state.startY, w: mx - state.startX, h: my - state.startY };
+                state.boxHovered = getItemsInBox(state.selectionBox); 
+                dirty = true;
+            } else if (state.isDrawing) { 
+                const p = toImg(mx, my); 
+                state.currX = p.x; state.currY = p.y; 
+                dirty = true;
+            } else if (state.mode === 'select') { 
+                const hit = hitTest(mx, my); 
+                // 简单的状态变化检测
+                if (JSON.stringify(hit) !== JSON.stringify(state.hovered)) { 
+                    state.hovered = hit; 
+                    dirty = true; 
+                } 
+            }
+
+            if (dirty) requestRender();
+        };
+
+        window.onmouseup = (e) => {
+            if (state.isPanning) { state.isPanning = false; return; }
+            
+            if (state.isBoxSelecting) { 
+                state.isBoxSelecting = false; 
+                applyBoxSelection(e.shiftKey); 
+                state.selectionBox = null; 
+                state.boxHovered = []; 
+                updateMiniMenuPosition(); 
+                requestRender(); 
+                return; 
+            }
+            
+            if (state.isMovingSelection) { 
+                state.isMovingSelection = false; 
+                if (state.hasMoved && state.selection.some(s => s.type === 'calib')) showToast("已更新校准"); 
+                updateMiniMenuPosition(); 
+                requestRender(); 
+                return; 
+            }
+            
+            if (state.isDrawing) {
+                state.isDrawing = false; 
+                const dist = Math.hypot(state.currX - state.startX, state.currY - state.startY);
+                if (dist < 2) { requestRender(); return; }
+                
+                if (state.mode === 'calibrate') {
+                    state.calibLines.push({ x1: state.startX, y1: state.startY, x2: state.currX, y2: state.currY, pxLen: dist, realLen: 0 });
+                    state.editingLineIndex = state.calibLines.length - 1; 
+                    state.inputBuffer = ""; 
+                    requestRender();
+                } else if (state.mode === 'measure') {
+                    state.measureLines.push({ x1: state.startX, y1: state.startY, x2: state.currX, y2: state.currY, pxLen: dist }); 
+                    requestRender();
+                }
+            }
+        };
+
+        function toggleSelection(item) {
+            const idx = state.selection.findIndex(s => s.type === item.type && s.index === item.index && s.part === item.part);
+            if (idx >= 0) state.selection.splice(idx, 1); else state.selection.push(item); 
+            consolidateSelection();
+        }
+
+        function consolidateSelection() {
+            const counts = {}; 
+            state.selection.forEach(s => { 
+                const key = `${s.type}-${s.index}`; 
+                if (!counts[key]) counts[key] = new Set(); 
+                counts[key].add(s.part); 
+            });
+            const newSel = [];
+            for (const key in counts) {
+                const parts = counts[key], [type, idxStr] = key.split('-'), index = parseInt(idxStr);
+                if (parts.has('line') || (parts.has('p1') && parts.has('p2'))) { 
+                    newSel.push({ type, index, part: 'line' }); 
+                    if (parts.has('label')) newSel.push({ type, index, part: 'label' }); 
+                } else parts.forEach(p => newSel.push({ type, index, part: p }));
+            }
+            state.selection = newSel;
+        }
+
+        function getItemsInBox(bx) {
+            const x = Math.min(bx.x, bx.x + bx.w), y = Math.min(bx.y, bx.y + bx.h), w = Math.abs(bx.w), h = Math.abs(bx.h);
+            const inRect = (sx, sy) => sx >= x && sx <= x + w && sy >= y && sy <= y + h;
+            const res = [];
+            const check = (arr, type) => arr.forEach((l, i) => {
+                const p1 = toScreen(l.x1, l.y1), p2 = toScreen(l.x2, l.y2), mid = { x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2 };
+                if (inRect(p1.x, p1.y)) res.push({ type, index: i, part: 'p1' });
+                if (inRect(p2.x, p2.y)) res.push({ type, index: i, part: 'p2' });
+                if (inRect(mid.x, mid.y)) res.push({ type, index: i, part: 'line' });
+            });
+            check(state.calibLines, 'calib'); check(state.measureLines, 'measure'); 
+            return res;
+        }
+
+        function applyBoxSelection(isShift) {
+            const items = state.boxHovered;
+            if (isShift) {
+                items.forEach(item => { 
+                    if (!state.selection.some(s => s.type === item.type && s.index === item.index && s.part === item.part)) {
+                        state.selection.push(item); 
+                    }
+                });
+            } else {
+                state.selection = [...items];
+            }
+            consolidateSelection();
+        }
+
+        function moveSelection(dx, dy) {
+            const pts = new Set();
+            state.selection.forEach(s => { 
+                if (s.part === 'label') return; 
+                if (s.part === 'line') { pts.add(`${s.type}-${s.index}-p1`); pts.add(`${s.type}-${s.index}-p2`); } 
+                else pts.add(`${s.type}-${s.index}-${s.part}`); 
+            });
+            
+            pts.forEach(key => {
+                const [type, idxStr, part] = key.split('-');
+                const idx = parseInt(idxStr);
+                const line = (type === 'calib' ? state.calibLines : state.measureLines)[idx];
+                if (part === 'p1') { line.x1 += dx; line.y1 += dy; } else { line.x2 += dx; line.y2 += dy; }
+                line.pxLen = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+            });
+            
+            if (state.selection.some(s => s.type === 'calib')) updateScale();
+        }
+
+        window.changeLength = function(idx) {
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+            state.editingLineIndex = idx; 
+            state.inputBuffer = state.calibLines[idx].realLen > 0 ? state.calibLines[idx].realLen.toString() : "";
+            state.selection = []; 
+            hideMiniMenu(); 
+            requestRender();
+        }
+
+        function commitEdit(val) { 
+            state.calibLines[state.editingLineIndex].realLen = val; 
+            state.editingLineIndex = -1; 
+            updateScale(); 
+            requestRender(); 
+        }
+
+        function updateMiniMenuPosition() {
+            if (state.selection.length === 0) { hideMiniMenu(); return; }
+            
+            let currentSignature = '';
+            const isLabelOnly = state.selection.length === 1 && state.selection[0].part === 'label';
+            
+            if (isLabelOnly) {
+                const idx = state.selection[0].index;
+                currentSignature = `label-${idx}`;
+                if (state.menuSignature !== currentSignature) {
+                    el.miniMenu.innerHTML = `
+                        <button class="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold transition flex items-center gap-1" onclick="window.changeLength(${idx})">更改长度</button>
+                        <div class="w-px h-4 bg-gray-600"></div>
+                        <button id="menuCancel" class="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold transition">取消</button>`;
+                    
+                    setTimeout(() => {
+                        const btn = document.getElementById('menuCancel');
+                        if (btn) btn.onclick = () => { state.selection=[]; requestRender(); hideMiniMenu(); };
+                    }, 0);
+                    state.menuSignature = currentSignature;
+                }
+            } else {
+                currentSignature = `std-${state.isMoveToolActive}`;
+                if (state.menuSignature !== currentSignature) {
+                    el.miniMenu.innerHTML = `
+                        <button id="menuMove" class="flex items-center gap-1 px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold transition ${state.isMoveToolActive ? 'bg-blue-600' : ''}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708l2-2zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10zM.146 8.354a.5.5 0 0 1 0-.708l2-2a.5.5 0 1 1 .708.708L1.707 7.5H5.5a.5.5 0 0 1 0 1H1.707l1.147 1.146a.5.5 0 0 1-.708.708l-2-2zM10 8a.5.5 0 0 1 .5-.5h3.793l-1.147-1.146a.5.5 0 0 1 .708-.708l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L14.293 8.5H10.5A.5.5 0 0 1 10 8z"/></svg>移动
+                        </button>
+                        <div class="w-px h-4 bg-gray-600"></div>
+                        <button id="menuDelete" class="flex items-center gap-1 px-3 py-1.5 hover:bg-red-900 text-red-100 rounded text-xs font-bold transition"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>删除</button>`;
+                    setTimeout(() => {
+                        const btnMove = document.getElementById('menuMove');
+                        const btnDel = document.getElementById('menuDelete');
+                        if(btnMove) btnMove.onclick = (e) => { 
+                            e.stopPropagation(); 
+                            state.isMoveToolActive = !state.isMoveToolActive; 
+                            state.menuSignature = null; 
+                            updateCursor(); 
+                            updateMiniMenuPosition(); 
+                            requestRender(); 
+                        };
+                        if(btnDel) btnDel.onclick = (e) => { 
+                            e.stopPropagation(); 
+                            const cd = new Set(), md = new Set(); 
+                            state.selection.forEach(s => { if (s.type === 'calib') cd.add(s.index); else md.add(s.index); });
+                            state.calibLines = state.calibLines.filter((_, i) => !cd.has(i)); 
+                            state.measureLines = state.measureLines.filter((_, i) => !md.has(i));
+                            state.selection = []; 
+                            updateScale(); 
+                            requestRender(); 
+                            hideMiniMenu();
+                        };
+                    }, 0);
+                    state.menuSignature = currentSignature;
+                }
+            }
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let hasItem = false;
+            const expand = (x, y) => { 
+                const s = toScreen(x, y); 
+                minX = Math.min(minX, s.x); maxX = Math.max(maxX, s.x); 
+                minY = Math.min(minY, s.y); maxY = Math.max(maxY, s.y); 
+                hasItem = true; 
+            };
+            
+            state.selection.forEach(s => {
+                const l = (s.type === 'calib' ? state.calibLines : state.measureLines)[s.index];
+                if (!l) return;
+                if (s.part === 'label' && l._labelRect) {
+                    minX = Math.min(minX, l._labelRect.x); maxX = Math.max(maxX, l._labelRect.x+l._labelRect.w);
+                    minY = Math.min(minY, l._labelRect.y); maxY = Math.max(maxY, l._labelRect.y+l._labelRect.h);
+                    hasItem = true;
+                } else { expand(l.x1, l.y1); expand(l.x2, l.y2); }
+            });
+
+            if (!hasItem) { hideMiniMenu(); return; }
+
+            el.miniMenu.classList.remove('menu-hidden');
+            
+            // 核心定位重写：基于视口坐标系的精确控制
+            const mw = el.miniMenu.offsetWidth;
+            const mh = el.miniMenu.offsetHeight;
+            const viewportRect = el.viewport.getBoundingClientRect();
+            const vw = viewportRect.width;
+            const vh = viewportRect.height;
+            const padding = 10;
+
+            // 1. 水平定位：居中于物体，限制在视口内
+            let relLeft = (minX + maxX) / 2 - mw / 2;
+            relLeft = Math.max(padding, Math.min(relLeft, vw - mw - padding));
+
+            // 2. 垂直定位：优先上方
+            let relTop = minY - mh - padding; 
+
+            // 3. 空间检测：如果上方空间不足，则尝试放在下方
+            if (relTop < padding) {
+                relTop = maxY + padding;
+            }
+
+            // 4. 强制约束：应用与水平方向相同的逻辑，严格限制在视口垂直范围内
+            // 这样无论物体是否超大、是否在屏幕边缘，菜单永远不会跑出视口
+            relTop = Math.max(padding, Math.min(relTop, vh - mh - padding));
+
+            // 5. 转换为页面绝对坐标（因为 miniMenu 是 body 的子元素）
+            el.miniMenu.style.left = `${viewportRect.left + relLeft}px`;
+            el.miniMenu.style.top = `${viewportRect.top + relTop}px`;
+        }
+
+        function hideMiniMenu() { 
+            el.miniMenu.classList.add('menu-hidden'); 
+            state.isMoveToolActive = false; 
+            state.menuSignature = null; 
+        }
+        
+        function updateCursor() {
+            if (state.isDrawing || state.isMovingSelection) { el.overlay.style.cursor = 'none'; return; }
+            if (state.spacePressed) { el.overlay.style.cursor = 'grab'; return; }
+            if (state.isMoveToolActive) { el.overlay.style.cursor = 'move'; return; }
+            
+            // 校准和测量模式下使用十字光标
+            if (state.mode === 'calibrate' || state.mode === 'measure') {
+                el.overlay.style.cursor = 'crosshair';
+            } else {
+                el.overlay.style.cursor = state.hovered ? 'pointer' : 'default';
+            }
+        }
+
+        window.onkeydown = (e) => {
+            if (e.code === 'Space') { state.spacePressed = true; updateCursor(); e.preventDefault(); }
+            
+            if (state.editingLineIndex !== -1) {
+                e.stopPropagation(); 
+                if ((e.key >= '0' && e.key <= '9') || e.key === '.') { 
+                    if (e.key === '.' && state.inputBuffer.includes('.')) return; 
+                    state.inputBuffer += e.key; 
+                    requestRender(); 
+                } else if (e.key === 'Backspace') { 
+                    state.inputBuffer = state.inputBuffer.slice(0, -1); 
+                    requestRender(); 
+                } else if (e.key === 'Enter') { 
+                    const val = parseFloat(state.inputBuffer); 
+                    if (!isNaN(val) && val > 0) commitEdit(val); 
+                } else if (e.key === 'Escape') { 
+                    state.editingLineIndex = -1; 
+                    requestRender(); 
+                } 
+                return;
+            }
+
+            if (e.key === 'Delete' || e.key === 'Backspace') { 
+                if (state.selection.length > 0) { 
+                    const cd = new Set(), md = new Set(); 
+                    state.selection.forEach(s => { if (s.type === 'calib') cd.add(s.index); else md.add(s.index); });
+                    state.calibLines = state.calibLines.filter((_, i) => !cd.has(i)); 
+                    state.measureLines = state.measureLines.filter((_, i) => !md.has(i));
+                    state.selection = []; 
+                    updateScale(); 
+                    requestRender(); 
+                    hideMiniMenu();
+                } 
+            }
+            if (e.key === 'Escape') { 
+                state.pendingLine = null; 
+                state.selection = []; 
+                state.editingLineIndex = -1; 
+                hideMiniMenu(); 
+                requestRender(); 
+            }
+            if (document.activeElement.tagName !== 'INPUT' && !e.ctrlKey && !e.metaKey) {
+                if (e.key.toLowerCase() === 's') switchMode('select'); 
+                if (e.key.toLowerCase() === 'c') switchMode('calibrate'); 
+                if (e.key.toLowerCase() === 'm') switchMode('measure');
+            }
+        };
+        
+        window.onkeyup = (e) => { 
+            if (e.code === 'Space') { state.spacePressed = false; updateCursor(); } 
+        };
+
+        el.btns.calib.onclick = () => switchMode('calibrate'); 
+        el.btns.measure.onclick = () => switchMode('measure'); 
+        el.btns.select.onclick = () => switchMode('select');
+        
+        function switchMode(m) {
+            state.mode = m; 
+            state.pendingLine = null; 
+            state.selection = []; 
+            state.editingLineIndex = -1; 
+            hideMiniMenu();
+            
+            const baseClass = "px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-1";
+            const activeClass = "bg-white shadow text-blue-600";
+            const inactiveClass = "text-gray-500 hover:text-gray-700";
+            
+            el.btns.calib.className = `${baseClass} ${m==='calibrate' ? activeClass : inactiveClass}`;
+            el.btns.measure.className = `${baseClass} ${m==='measure' ? activeClass : inactiveClass}`;
+            el.btns.select.className = `${baseClass} ${m==='select' ? activeClass : inactiveClass}`;
+            
+            requestRender();
+        }
+
+        el.zoomIn.onclick = () => { state.scale *= 1.2; requestRender(); }; 
+        el.zoomOut.onclick = () => { state.scale *= 0.8; requestRender(); };
+        
+        el.viewport.onwheel = (e) => {
+            e.preventDefault(); 
+            const f = e.deltaY < 0 ? 1.1 : 0.9;
+            const rect = el.viewport.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const oldS = state.scale;
+            
+            state.scale = Math.min(Math.max(0.01, state.scale * f), 100);
+            
+            state.offsetX = mx - (mx - state.offsetX) * (state.scale / oldS); 
+            state.offsetY = my - (my - state.offsetY) * (state.scale / oldS);
+            
+            el.zoomDisplay.innerText = Math.round(state.scale * 100) + "%"; 
+            requestRender();
+        };
+
+        el.styleBtn.onclick = () => el.styleMenu.classList.toggle('menu-hidden');
+        el.closeStyleMenu.onclick = () => el.styleMenu.classList.add('menu-hidden');
+        el.inputFontSize.oninput = (e) => { state.labelStyle.fontSize = parseInt(e.target.value); el.fsVal.innerText = state.labelStyle.fontSize; requestRender(); };
+        el.inputBgOpacity.oninput = (e) => { state.labelStyle.bgOpacity = parseInt(e.target.value); el.opVal.innerText = state.labelStyle.bgOpacity; requestRender(); };
+        el.inputDotRadius.oninput = (e) => { state.labelStyle.dotRadius = parseFloat(e.target.value); el.dotVal.innerText = state.labelStyle.dotRadius; requestRender(); };
+        el.inputLineWidth.oninput = (e) => { state.labelStyle.lineWidth = parseFloat(e.target.value); el.lwVal.innerText = state.labelStyle.lineWidth; requestRender(); };
+        
+        document.querySelectorAll('.align-btn').forEach(btn => { 
+            btn.onclick = () => { 
+                document.querySelectorAll('.align-btn').forEach(b => b.classList.remove('bg-blue-600', 'text-white')); 
+                btn.classList.add('bg-blue-600', 'text-white'); 
+                state.labelStyle.align = btn.dataset.val; 
+                requestRender(); 
+            }; 
+        });
+        
+        // Modal Logic
+        const closeModal = () => el.resetModal.classList.add('opacity-0', 'pointer-events-none');
+        el.resetBtn.onclick = () => el.resetModal.classList.remove('opacity-0', 'pointer-events-none');
+        el.cancelReset.onclick = closeModal;
+        if(el.closeResetX) el.closeResetX.onclick = closeModal;
+        
+        el.confirmReset.onclick = () => { 
+            resetData(); 
+            requestRender(); 
+            closeModal(); 
+            showToast("数据已重置"); 
+        };
+
+        function autoFit() { 
+            if (!state.img) return; 
+            const pad = 40, w = el.viewport.clientWidth - pad, h = el.viewport.clientHeight - pad;
+            const s = Math.min(w / state.img.width, h / state.img.height, 1); 
+            state.scale = s; 
+            state.offsetX = (el.viewport.clientWidth - state.img.width * s) / 2; 
+            state.offsetY = (el.viewport.clientHeight - state.img.height * s) / 2; 
+            el.zoomDisplay.innerText = Math.round(state.scale * 100) + "%"; 
+        }
+        
+        function updateScale() { 
+            if (state.calibLines.length === 0) { 
+                state.pixelsPerUnit = null; 
+                el.scaleInfo.innerText = "未校准"; 
+            } else { 
+                const total = state.calibLines.reduce((acc, l) => acc + (l.pxLen / l.realLen), 0); 
+                state.pixelsPerUnit = total / state.calibLines.length; 
+                el.scaleInfo.innerText = `1 ${state.unit} = ${state.pixelsPerUnit.toFixed(2)} px`; 
+            } 
+        }
+        
+        function showToast(msg) { 
+            el.toastMsg.innerText = msg; 
+            el.toast.classList.remove('opacity-0', 'scale-95'); 
+            setTimeout(() => el.toast.classList.add('opacity-0', 'scale-95'), 3000); 
+        }
+
+        switchMode('calibrate'); 
+        window.onresize = () => { autoFit(); requestRender(); };
+    </script>
+</body>
+</html>
